@@ -28,8 +28,8 @@ export default function AuthScreen() {
   }
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gray-100">
-      <div className="w-full max-w-md p-8 space-y-8 bg-white rounded-lg shadow-md">
+    <div className="flex items-center justify-center min-h-screen flex-col bg-gray-100">
+      <div className="max-w-7xl mx-auto py-2 px-4 sm:px-6 lg:px-8 bg-white rounded-lg shadow-md">
         <div className="text-center">
           <h2 className="mt-6 text-3xl font-extrabold text-gray-900">
             Mach.chat
@@ -38,10 +38,11 @@ export default function AuthScreen() {
             Sign in to start messaging
           </p>
         </div>
-        <button
+       <div className="pt-6 pb-6">
+       <button
           onClick={handleGoogleSignIn}
           disabled={loading}
-          className="w-full flex items-center justify-center px-4 py-2 group h-12 px-14 border-2 border-gray-300 rounded-full transition duration-300 text-black hover:border-blue-400 focus:bg-blue-50 active:bg-blue-100"
+          className="w-full flex items-center justify-center  py-2 group h-12 px-14 border-2 border-gray-300 rounded-full transition duration-300 text-black hover:border-blue-400 focus:bg-blue-50 active:bg-blue-100"
         >
          <div className="relative flex items-center space-x-4 justify-center">
     <img src="https://www.svgrepo.com/show/475656/google-color.svg"
@@ -58,6 +59,7 @@ export default function AuthScreen() {
 </div>
          
         </button>
+       </div>
         {error && (
           <p className="mt-2 text-sm text-red-600">{error}</p>
         )}
