@@ -445,6 +445,8 @@ export default function AdminPage() {
                 <p className="text-xs sm:text-sm text-gray-500">{selectedUser.email}</p>
               </div>
             </div>
+
+            
             <div className="flex-grow overflow-y-auto p-2 sm:p-4">
               {isLoadingMessages ? (
                 <div className="flex justify-center items-center h-full">
@@ -495,6 +497,8 @@ export default function AdminPage() {
               )}
               <div ref={messagesEndRef} />
             </div>
+
+
             <div className="bg-white border-t p-2 sm:p-4">
               <div className="max-w-7xl mx-auto py-2 px-4 sm:px-6 lg:px-8">
   {(file || audioBlob) && (
@@ -600,6 +604,9 @@ export default function AdminPage() {
           </div>
         )}
       </div>
+
+
+
     </div>
   </div>
   )

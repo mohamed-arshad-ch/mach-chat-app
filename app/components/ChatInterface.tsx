@@ -347,9 +347,12 @@ export default function ChatInterface() {
           </div>
         </div>
       </header>
-      <main className="w-full flex-grow flex overflow-hidden">
-        <div className="max-w-7xl mx-auto py-2 px-4 sm:px-6 lg:px-8 h-full flex flex-col">
-          <div className="flex-grow overflow-y-auto px-2 sm:px-4 py-4">
+
+
+
+      <main className=" flex-grow flex flex-col overflow-hidden">
+        <>
+        
             <div className="flex-grow overflow-y-auto mb-4 bg-gray-100 p-2 sm:p-4 rounded-lg">
               {isLoadingMessages ? (
                 <div className="flex justify-center items-center h-full">
@@ -401,10 +404,11 @@ export default function ChatInterface() {
               )}
               <div ref={messagesEndRef} />
             </div>
-          </div>
-         
-        </div>
+        
+        </>
       </main>
+
+
 
       <footer className="bg-white shadow">
             <div className="max-w-7xl mx-auto py-2 px-4 sm:px-6 lg:px-8">
