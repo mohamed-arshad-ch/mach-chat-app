@@ -10,7 +10,7 @@ import Image from 'next/image'
 import { Message, User as ChatUser } from '@/lib/types'
 import { signOut } from 'firebase/auth'
 import CustomVoicePlayer from '@/components/CustomVoicePlayer'
-import { Tooltip, TooltipProvider } from "@/components/ui/tooltip"
+import { Tooltip } from "@/components/ui/tooltip"
 
 interface Conversation {
   user: ChatUser
@@ -350,21 +350,21 @@ export default function AdminPage() {
   return (
     <div className="flex flex-col h-screen bg-gray-100">
     <header className="bg-white shadow-md">
-      <div className="max-w-7xl mx-auto py-4 px-4 sm:px-6 lg:px-8 flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-gray-900">Admin Dashboard</h1>
+      <div className="max-w-7xl mx-auto py-2 px-4 sm:px-6 lg:px-8 flex justify-between items-center">
+        <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Admin Dashboard</h1>
         <div className="flex items-center space-x-4">
           {adminUser && (
             <Image
               src={adminUser.photoURL || '/placeholder-avatar.png'}
               alt="Admin avatar"
-              width={40}
-              height={40}
+              width={32}
+              height={32}
               className="rounded-full"
             />
           )}
           <button
             onClick={handleSignOut}
-            className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-50"
+            className="px-3 py-1 sm:px-4 sm:py-2 bg-red-500 text-white text-sm rounded hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-50"
           >
             Logout
           </button>
@@ -373,7 +373,7 @@ export default function AdminPage() {
     </header>
     <div className="flex-grow flex overflow-hidden">
       <div className={`w-full md:w-1/3 flex flex-col ${selectedUser ? 'hidden md:flex' : ''}`}>
-        <div className="p-4">
+        <div className="p-2 sm:p-4">
           <div className="relative">
             <input
               type="text"
@@ -385,7 +385,7 @@ export default function AdminPage() {
             <FiSearch className="absolute left-2 top-3 text-gray-400" />
           </div>
         </div>
-        <div className="flex-grow overflow-y-auto">
+        <div className="flex-grow overflow-y-auto px-2 sm:px-4">
           {isLoading ? (
             <div className="flex justify-center items-center h-full">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
@@ -426,7 +426,7 @@ export default function AdminPage() {
       <div className={`w-full md:w-2/3 flex flex-col ${!selectedUser ? 'hidden md:flex' : ''}`}>
         {selectedUser ? (
           <>
-            <div className="bg-white p-4 shadow-md flex items-center">
+            <div className="bg-white p-2 sm:p-4 shadow-md flex items-center">
               <button 
                 onClick={() => setSelectedUser(null)} 
                 className="md:hidden mr-2 p-1 rounded-full hover:bg-gray-200"
@@ -436,16 +436,16 @@ export default function AdminPage() {
               <Image
                 src={selectedUser.photoURL || '/placeholder-avatar.png'}
                 alt={selectedUser.displayName || 'User'}
-                width={40}
-                height={40}
+                width={32}
+                height={32}
                 className="rounded-full mr-3"
               />
               <div>
-                <h2 className="text-lg font-semibold">{selectedUser.displayName || 'Anonymous'}</h2>
-                <p className="text-sm text-gray-500">{selectedUser.email}</p>
+                <h2 className="text-sm sm:text-lg font-semibold">{selectedUser.displayName || 'Anonymous'}</h2>
+                <p className="text-xs sm:text-sm text-gray-500">{selectedUser.email}</p>
               </div>
             </div>
-            <div className="flex-grow overflow-y-auto p-4">
+            <div className="flex-grow overflow-y-auto p-2 sm:p-4">
               {isLoadingMessages ? (
                 <div className="flex justify-center items-center h-full">
                   <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
@@ -495,94 +495,103 @@ export default function AdminPage() {
               )}
               <div ref={messagesEndRef} />
             </div>
-            <div className="bg-white border-t p-4">
-              {(file || audioBlob) && (
-                <div className="mb-2 p-2 bg-gray-100 rounded-lg relative">
-                  {file && previewUrl ? (
-                    file.type.startsWith('image/') ? (
-                      <img src={previewUrl} alt="Selected file preview" className="max-w-xs h-auto rounded" />
-                    ) : (
-                      <video src={previewUrl} className="max-w-xs h-auto rounded" controls />
-                    )
-                  ) : file ? (
-                    <div className="flex items-center space-x-2">
-                      {getFileIcon(file.type)}
-                      <span className="text-sm text-gray-600">{file.name}</span>
-                    </div>
-                  ) : audioBlob ? (
-                    <div className="flex items-center space-x-2">
-                      <FiMic className="w-6 h-6" />
-                      <span className="text-sm text-gray-600">Voice message</span>
-                      <audio src={URL.createObjectURL(audioBlob)} controls className="max-w-full" />
-                    </div>
-                  ) : null}
-                  <button
-                    onClick={() => {
-                      removeFile();
-                      setAudioBlob(null);
-                    }}
-                    className="absolute top-1 right-1 p-1 bg-gray-200 rounded-full hover:bg-gray-300 focus:outline-none"
-                  >
-                    <FiX className="w-4 h-4" />
-                  </button>
-                </div>
-              )}
-              <form onSubmit={handleReply} className="flex items-center space-x-2">
-                <input
-                  type="text"
-                  value={replyText}
-                  onChange={(e) => setReplyText(e.target.value)}
-                  placeholder="Type your reply..."
-                  className="flex-grow p-2 border rounded"
-                  disabled={isSending || isRecording}
-                />
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  onChange={handleFileChange}
-                  className="hidden"
-                  accept="image/*,video/*,application/*"
-                  disabled={isSending || isRecording}
-                />
-                <button
-                  type="button"
-                  onClick={triggerFileInput}
-                  className="p-2 bg-gray-200 rounded hover:bg-gray-300 disabled:opacity-50"
-                  disabled={isSending || isRecording}
-                >
-                  <FiPaperclip className="w-5 h-5" />
-                </button>
-                <TooltipProvider>
-                <Tooltip content="Record up to 20 seconds">
-                  <button
-                    type="button"
-                    onClick={toggleRecording}
-                    className={`p-2 rounded ${
-                      isRecording ? 'bg-red-500 text-white' : 'bg-gray-200 hover:bg-gray-300'
-                    } disabled:opacity-50`}
-                    disabled={isSending}
-                  >
-                    {isRecording ? <FiSquare className="w-5 h-5" /> : <FiMic className="w-5 h-5" />}
-                  </button>
-                </Tooltip>
-                </TooltipProvider>
-                {isRecording && (
-                  <span className="text-sm text-red-500">
-                    Recording: {recordingTime}s / 20s
-                  </span>
-                )}
-                <button
-                  type="submit"
-                  className="p-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
-                  disabled={isSending || isRecording}
-                >
-                  {isSending ? (
-                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                  ) : (
-                    <FiSend className="w-5 h-5" />
-                  )}
-                </button>
-              </form>
+            <div className="bg-white border-t p-2 sm:p-4">
+              <div className="max-w-7xl mx-auto py-2 px-4 sm:px-6 lg:px-8">
+  {(file || audioBlob) && (
+    <div className="mb-2 p-2 bg-gray-100 rounded-lg relative">
+      {file && previewUrl ? (
+        file.type.startsWith('image/') ? (
+          <img src={previewUrl} alt="Selected file preview" className="max-w-xs h-auto rounded" />
+        ) : (
+          <video src={previewUrl} className="max-w-xs h-auto rounded" controls />
+        )
+      ) : file ? (
+        <div className="flex items-center space-x-2">
+          {getFileIcon(file.type)}
+          <span className="text-sm text-gray-600">{file.name}</span>
+        </div>
+      ) : audioBlob ? (
+        <div className="flex items-center space-x-2">
+          <FiMic className="w-6 h-6" />
+          <span className="text-sm text-gray-600">Voice message</span>
+          <audio src={URL.createObjectURL(audioBlob)} controls className="max-w-full" />
+        </div>
+      ) : null}
+      <button
+        onClick={() => {
+          removeFile();
+          setAudioBlob(null);
+        }}
+        className="absolute top-1 right-1 p-1 bg-gray-200 rounded-full hover:bg-gray-300 focus:outline-none"
+      >
+        <FiX className="w-4 h-4" />
+      </button>
+    </div>
+  )}
+  <form onSubmit={handleReply} className="flex items-center space-x-2">
+    <div className="relative flex-grow">
+      <input
+        type="text"
+        value={replyText}
+        onChange={(e) => setReplyText(e.target.value)}
+        placeholder="Type your reply..."
+        className="w-full pl-4 pr-12 py-2 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500"
+        disabled={isSending || isRecording}
+      />
+      <div className="absolute inset-y-0 right-0 flex items-center pr-3">
+        <button
+          type="button"
+          onClick={triggerFileInput}
+          className="p-1 rounded-full text-gray-400 hover:text-gray-600 focus:outline-none"
+          disabled={isSending || isRecording}
+        >
+          <FiPaperclip className="w-5 h-5" />
+        </button>
+      </div>
+    </div>
+    <input
+      type="file"
+      ref={fileInputRef}
+      onChange={handleFileChange}
+      className="hidden"
+      accept="image/*,video/*,application/*"
+      disabled={isSending || isRecording}
+    />
+    {replyText.trim() || file || audioBlob ? (
+      <button
+        type="submit"
+        className="p-2 rounded-full bg-blue-500 hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+        disabled={isSending || isRecording}
+      >
+        {isSending ? (
+          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+        ) : (
+          <FiSend className="w-5 h-5 text-white" />
+        )}
+      </button>
+    ) : (
+      <Tooltip content="Record up to 20 seconds">
+        <button
+          type="button"
+          onClick={toggleRecording}
+          className={`p-2 rounded-full ${
+            isRecording ? 'bg-red-500 text-white' : 'bg-blue-500 hover:bg-blue-600'
+          } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50`}
+          disabled={isSending}
+        >
+          {isRecording ? <FiSquare className="w-5 h-5" /> : <FiMic className="w-5 h-5 text-white" />}
+        </button>
+      </Tooltip>
+    )}
+  </form>
+  {isRecording && (
+    <div className="mt-2 text-center">
+      <span className="text-sm text-red-500">
+        Recording: {recordingTime}s / 20s
+      </span>
+    </div>
+  )}
+</div>
             </div>
           </>
         ) : (
@@ -595,6 +604,4 @@ export default function AdminPage() {
   </div>
   )
 }
-
-
 

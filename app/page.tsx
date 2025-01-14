@@ -35,9 +35,9 @@ export default function Home() {
   }
 
   return (
-    <main className="flex min-h-screen flex-col">
+    <>
       {user && user.email !== 'mohamedarshadcholasseri5050@gmail.com' ? <ChatInterface /> : <AuthScreen />}
-    </main>
+    </>
   )
 }
 

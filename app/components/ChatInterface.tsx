@@ -10,7 +10,6 @@ import Image from 'next/image'
 import { Message, User as ChatUser } from '@/lib/types'
 import CustomVoicePlayer from '@/components/CustomVoicePlayer'
 import { Tooltip } from "@/components/ui/tooltip"
-import { TooltipProvider } from '@radix-ui/react-tooltip'
 
 const MAX_FILE_SIZE = 1024 * 1024; // 1MB
 
@@ -306,10 +305,10 @@ export default function ChatInterface() {
   }
 
   return (
-    <div className="flex flex-col h-screen bg-gray-100">
-      <header className="bg-white shadow">
-        <div className="max-w-7xl mx-auto py-4 px-4 sm:px-6 lg:px-8 flex justify-between items-center">
-          <h1 className="text-2xl font-bold text-gray-900">MachChat</h1>
+    <div className='flex flex-col h-screen bg-gray-100' >
+      <header className="bg-white shadow ">
+        <div className="max-w-7xl mx-auto py-2 px-4 sm:px-6 lg:px-8 flex justify-between items-center">
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900">MachChat</h1>
           <div className="relative">
             <button
               onClick={() => setShowDropdown(!showDropdown)}
@@ -318,8 +317,8 @@ export default function ChatInterface() {
               <Image
                 src={user?.photoURL || '/placeholder-avatar.png'}
                 alt="User avatar"
-                width={40}
-                height={40}
+                width={32}
+                height={32}
                 className="rounded-full"
               />
             </button>
@@ -348,10 +347,10 @@ export default function ChatInterface() {
           </div>
         </div>
       </header>
-      <main className="flex-grow overflow-hidden">
-        <div className="max-w-7xl mx-auto h-full flex flex-col">
-          <div className="flex-grow overflow-y-auto px-4 py-6">
-            <div className="flex-grow overflow-y-auto mb-4 bg-gray-100 p-4 rounded-b-lg">
+      <main className="w-full flex-grow flex overflow-hidden">
+        <div className="max-w-7xl mx-auto py-2 px-4 sm:px-6 lg:px-8 h-full flex flex-col">
+          <div className="flex-grow overflow-y-auto px-2 sm:px-4 py-4">
+            <div className="flex-grow overflow-y-auto mb-4 bg-gray-100 p-2 sm:p-4 rounded-lg">
               {isLoadingMessages ? (
                 <div className="flex justify-center items-center h-full">
                   <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
@@ -374,9 +373,7 @@ export default function ChatInterface() {
                             message.sendUser.uid === user?.uid ? 'bg-indigo-500 text-white' : 'bg-gray-200 text-gray-900'
                           }`}
                         >
-                          {message.sendUser.uid !== user?.uid && (
-                            <p className="text-xs mb-1">From: {message.sendUser.displayName || 'Admin'}</p>
-                          )}
+                         
                           {message.text && <p className="mb-2">{message.text}</p>}
                           {message.type === 'image' && (
                             <img src={message.fileData} alt="Uploaded image" className="max-w-full h-auto rounded" />
@@ -405,8 +402,12 @@ export default function ChatInterface() {
               <div ref={messagesEndRef} />
             </div>
           </div>
-          <footer className="bg-white shadow">
-            <div className="max-w-7xl mx-auto py-4 px-4 sm:px-6 lg:px-8">
+         
+        </div>
+      </main>
+
+      <footer className="bg-white shadow">
+            <div className="max-w-7xl mx-auto py-2 px-4 sm:px-6 lg:px-8">
               {(file || audioBlob) && (
                 <div className="mb-2 p-2 bg-gray-100 rounded-lg relative">
                   {file && previewUrl ? (
@@ -439,14 +440,26 @@ export default function ChatInterface() {
                 </div>
               )}
               <form onSubmit={handleSendMessage} className="flex items-center space-x-2">
-                <input
-                  type="text"
-                  value={newMessage}
-                  onChange={(e) => setNewMessage(e.target.value)}
-                  placeholder="Type a message..."
-                  className="flex-grow px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  disabled={isSending || isRecording}
-                />
+                <div className="relative flex-grow">
+                  <input
+                    type="text"
+                    value={newMessage}
+                    onChange={(e) => setNewMessage(e.target.value)}
+                    placeholder="Type a message..."
+                    className="w-full pl-4 pr-12 py-2 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    disabled={isSending || isRecording}
+                  />
+                  <div className="absolute inset-y-0 right-0 flex items-center pr-3">
+                    <button
+                      type="button"
+                      onClick={triggerFileInput}
+                      className="p-1 rounded-full text-gray-400 hover:text-gray-600 focus:outline-none"
+                      disabled={isSending || isRecording}
+                    >
+                      <FiPaperclip className="w-5 h-5" />
+                    </button>
+                  </div>
+                </div>
                 <input
                   type="file"
                   ref={fileInputRef}
@@ -455,49 +468,42 @@ export default function ChatInterface() {
                   accept="image/*,video/*,application/*"
                   disabled={isSending || isRecording}
                 />
-                <button
-                  type="button"
-                  onClick={triggerFileInput}
-                  className="p-2 rounded-full bg-gray-200 hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
-                  disabled={isSending || isRecording}
-                >
-                  <FiPaperclip className="w-5 h-5 text-gray-600" />
-                </button>
-                <TooltipProvider>
-                <Tooltip content="Record up to 20 seconds">
+                {newMessage.trim() || file || audioBlob ? (
                   <button
-                    type="button"
-                    onClick={toggleRecording}
-                    className={`p-2 rounded-full ${
-                      isRecording ? 'bg-red-500 text-white' : 'bg-gray-200 hover:bg-gray-300'
-                    } focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50`}
-                    disabled={isSending}
+                    type="submit"
+                    className="p-2 rounded-full bg-indigo-500 hover:bg-indigo-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+                    disabled={isSending || isRecording}
                   >
-                    {isRecording ? <FiSquare className="w-5 h-5" /> : <FiMic className="w-5 h-5" />}
+                    {isSending ? (
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                    ) : (
+                      <FiSend className="w-5 h-5 text-white" />
+                    )}
                   </button>
-                </Tooltip>
-                </TooltipProvider>
-                {isRecording && (
+                ) : (
+                  <Tooltip content="Record up to 20 seconds">
+                    <button
+                      type="button"
+                      onClick={toggleRecording}
+                      className={`p-2 rounded-full ${
+                        isRecording ? 'bg-red-500 text-white' : 'bg-indigo-500 hover:bg-indigo-600'
+                      } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50`}
+                      disabled={isSending}
+                    >
+                      {isRecording ? <FiSquare className="w-5 h-5" /> : <FiMic className="w-5 h-5 text-white" />}
+                    </button>
+                  </Tooltip>
+                )}
+              </form>
+              {isRecording && (
+                <div className="mt-2 text-center">
                   <span className="text-sm text-red-500">
                     Recording: {recordingTime}s / 20s
                   </span>
-                )}
-                <button
-                  type="submit"
-                  className="p-2 rounded-full bg-indigo-500 hover:bg-indigo-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
-                  disabled={isSending || isRecording}
-                >
-                  {isSending ? (
-                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                  ) : (
-                    <FiSend className="w-5 h-5 text-white" />
-                  )}
-                </button>
-              </form>
+                </div>
+              )}
             </div>
           </footer>
-        </div>
-      </main>
     </div>
   )
 }
