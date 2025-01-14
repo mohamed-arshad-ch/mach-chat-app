@@ -5,11 +5,28 @@ import { auth, db } from '@/lib/firebase'
 import { collection, addDoc, query, orderBy, onSnapshot, Timestamp, updateDoc, where, getDocs, doc } from 'firebase/firestore'
 import { signOut } from 'firebase/auth'
 import { useRouter } from 'next/navigation'
-import { FiPaperclip, FiSend, FiLogOut, FiUser } from 'react-icons/fi'
+import { FiPaperclip, FiSend, FiLogOut, FiUser, FiFile, FiFilm, FiImage, FiX, FiMic, FiSquare } from 'react-icons/fi'
 import Image from 'next/image'
 import { Message, User as ChatUser } from '@/lib/types'
+import CustomVoicePlayer from '@/components/CustomVoicePlayer'
+import { Tooltip } from "@/components/ui/tooltip"
+import { TooltipProvider } from '@radix-ui/react-tooltip'
 
 const MAX_FILE_SIZE = 1024 * 1024; // 1MB
+
+const formatDate = (date: Date) => {
+  const today = new Date()
+  const yesterday = new Date(today)
+  yesterday.setDate(yesterday.getDate() - 1)
+
+  if (date.toDateString() === today.toDateString()) {
+    return 'Today'
+  } else if (date.toDateString() === yesterday.toDateString()) {
+    return 'Yesterday'
+  } else {
+    return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+  }
+}
 
 export default function ChatInterface() {
   const [user, setUser] = useState<ChatUser | null>(null)
@@ -17,15 +34,26 @@ export default function ChatInterface() {
   const [newMessage, setNewMessage] = useState('')
   const [file, setFile] = useState<File | null>(null)
   const [showDropdown, setShowDropdown] = useState(false)
-  const [isLoadingMessages, setIsLoadingMessages] = useState(true) // Added loading state
+  const [isLoadingMessages, setIsLoadingMessages] = useState(true)
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [isRecording, setIsRecording] = useState(false)
+  const [audioBlob, setAudioBlob] = useState<Blob | null>(null)
+  const [recordingTime, setRecordingTime] = useState(0)
+  const [isSending, setIsSending] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const audioChunksRef = useRef<Blob[]>([])
   const router = useRouter()
 
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged((user) => {
       if (user) {
-        setUser(user)
+        if (user.email === 'mohamedarshadcholasseri5050@gmail.com') {
+          router.push('/admin')
+        } else {
+          setUser(user)
+        }
       } else {
         router.push('/')
       }
@@ -36,7 +64,7 @@ export default function ChatInterface() {
 
   useEffect(() => {
     if (user) {
-      setIsLoadingMessages(true) // Set loading to true before fetching messages
+      setIsLoadingMessages(true)
       const q = query(
         collection(db, 'messages'),
         orderBy('createdAt', 'asc')
@@ -50,7 +78,7 @@ export default function ChatInterface() {
           }
         })
         setMessages(messageList)
-        setIsLoadingMessages(false) // Set loading to false after fetching messages
+        setIsLoadingMessages(false)
 
         // Mark admin messages as read
         const adminMessages = messageList.filter(m => m.sendUser.uid !== user.uid && !m.read)
@@ -67,6 +95,18 @@ export default function ChatInterface() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (isRecording) {
+      interval = setInterval(() => {
+        setRecordingTime((prevTime) => prevTime + 1);
+      }, 1000);
+    } else {
+      setRecordingTime(0);
+    }
+    return () => clearInterval(interval);
+  }, [isRecording]);
+
   const handleSignOut = async () => {
     try {
       await signOut(auth)
@@ -78,7 +118,8 @@ export default function ChatInterface() {
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault()
-    if ((newMessage.trim() || file) && user) {
+    if ((newMessage.trim() || file || audioBlob) && user) {
+      setIsSending(true)
       const messageData: Omit<Message, 'id'> = {
         text: newMessage,
         sendUser: {
@@ -98,24 +139,45 @@ export default function ChatInterface() {
         read: false,
       }
 
-      if (file) {
-        const reader = new FileReader()
-        reader.onload = async (event) => {
-          if (event.target && event.target.result) {
-            messageData.type = file.type.startsWith('image/') ? 'image' : 'file'
-            messageData.fileData = event.target.result as string
-            messageData.fileName = file.name
-            messageData.fileType = file.type
-            await addDoc(collection(db, 'messages'), messageData)
+      try {
+        if (audioBlob) {
+          const reader = new FileReader()
+          reader.onload = async (event) => {
+            if (event.target && event.target.result) {
+              messageData.type = 'voice'
+              messageData.fileData = event.target.result as string
+              messageData.fileName = 'voice_message.webm'
+              messageData.fileType = 'audio/webm'
+              await addDoc(collection(db, 'messages'), messageData)
+            }
           }
+          reader.readAsDataURL(audioBlob)
+        } else if (file) {
+          const reader = new FileReader()
+          reader.onload = async (event) => {
+            if (event.target && event.target.result) {
+              messageData.type = file.type.startsWith('image/') ? 'image' : file.type.startsWith('video/') ? 'video' : 'file'
+              messageData.fileData = event.target.result as string
+              messageData.fileName = file.name
+              messageData.fileType = file.type
+              await addDoc(collection(db, 'messages'), messageData)
+            }
+          }
+          reader.readAsDataURL(file)
+        } else {
+          await addDoc(collection(db, 'messages'), messageData)
         }
-        reader.readAsDataURL(file)
-      } else {
-        await addDoc(collection(db, 'messages'), messageData)
-      }
 
-      setNewMessage('')
-      setFile(null)
+        setNewMessage('')
+        setFile(null)
+        setPreviewUrl(null)
+        setAudioBlob(null)
+      } catch (error) {
+        console.error('Error sending message:', error)
+        alert('Failed to send message. Please try again.')
+      } finally {
+        setIsSending(false)
+      }
     }
   }
 
@@ -124,15 +186,123 @@ export default function ChatInterface() {
       const selectedFile = e.target.files[0];
       if (selectedFile.size <= MAX_FILE_SIZE) {
         setFile(selectedFile);
+        if (selectedFile.type.startsWith('image/') || selectedFile.type.startsWith('video/')) {
+          const url = URL.createObjectURL(selectedFile);
+          setPreviewUrl(url);
+        } else {
+          setPreviewUrl(null);
+        }
       } else {
         alert('This file cannot be sent. Maximum file size is 1MB.');
         e.target.value = ''; // Reset the input
+        setFile(null);
+        setPreviewUrl(null);
       }
     }
-  };
+  }
+
+  const removeFile = () => {
+    setFile(null);
+    setPreviewUrl(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  }
+
+  const getFileIcon = (fileType: string) => {
+    if (fileType.startsWith('image/')) return <FiImage className="w-6 h-6" />;
+    if (fileType.startsWith('video/')) return <FiFilm className="w-6 h-6" />;
+    return <FiFile className="w-6 h-6" />;
+  }
 
   const triggerFileInput = () => {
     fileInputRef.current?.click()
+  }
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        if (audioBlob.size <= MAX_FILE_SIZE) {
+          setAudioBlob(audioBlob);
+        } else {
+          alert('Voice message is too large. Maximum size is 1MB.');
+        }
+        setIsRecording(false);
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+
+      // Automatically stop recording after 20 seconds
+      setTimeout(() => {
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+          stopRecording();
+        }
+      }, 20000);
+    } catch (error) {
+      console.error('Error starting recording:', error);
+      alert('Failed to start recording. Please check your microphone permissions.');
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+    }
+  };
+
+  const toggleRecording = () => {
+    if (isRecording) {
+      stopRecording();
+    } else {
+      startRecording();
+    }
+  };
+
+  const cancelRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+    }
+    setIsRecording(false);
+    setAudioBlob(null);
+    audioChunksRef.current = [];
+  };
+
+  const groupMessagesByDate = (messages: Message[]) => {
+    const grouped = messages.reduce((groups, message) => {
+      const date = formatDate(message.createdAt.toDate())
+      if (!groups[date]) {
+        groups[date] = []
+      }
+      groups[date].push(message)
+      return groups
+    }, {} as Record<string, Message[]>)
+
+    return Object.entries(grouped).sort((a, b) => {
+      return new Date(b[0]).getTime() - new Date(a[0]).getTime()
+    })
+  }
+
+  // If there's no user, show a loading state
+  if (!user) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="animate-spin rounded-full h-32 w-32 border-t-2 border-b-2 border-indigo-500"></div>
+      </div>
+    )
   }
 
   return (
@@ -187,33 +357,48 @@ export default function ChatInterface() {
                   <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
                 </div>
               ) : (
-                messages.map((message) => (
-                  <div
-                    key={message.id}
-                    className={`flex ${message.sendUser.uid === user?.uid ? 'justify-end' : 'justify-start'} mb-4`}
-                  >
-                    <div
-                      className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
-                        message.sendUser.uid === user?.uid ? 'bg-indigo-500 text-white' : 'bg-gray-200 text-gray-900'
-                      }`}
-                    >
-                      {message.sendUser.uid !== user?.uid && (
-                        <p className="text-xs mb-1">From: {message.sendUser.displayName || 'Admin'}</p>
-                      )}
-                      {message.type === 'text' && <p>{message.text}</p>}
-                      {message.type === 'image' && (
-                        <img src={message.fileData} alt="Uploaded image" className="max-w-full h-auto rounded" />
-                      )}
-                      {message.type === 'file' && (
-                        <a href={message.fileData} download={message.fileName} className="flex items-center space-x-2">
-                          <FiPaperclip className="w-4 h-4" />
-                          <span className="underline">{message.fileName}</span>
-                        </a>
-                      )}
-                      <div className="text-xs mt-1 flex justify-between">
-                        <span>{message.createdAt.toDate().toLocaleTimeString()}</span>
-                      </div>
+                groupMessagesByDate(messages).map(([date, messages]) => (
+                  <div key={date}>
+                    <div className="text-center my-4">
+                      <span className="bg-gray-200 text-gray-600 text-xs font-semibold px-2 py-1 rounded-full">
+                        {date}
+                      </span>
                     </div>
+                    {messages.map((message) => (
+                      <div
+                        key={message.id}
+                        className={`flex ${message.sendUser.uid === user?.uid ? 'justify-end' : 'justify-start'} mb-4`}
+                      >
+                        <div
+                          className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
+                            message.sendUser.uid === user?.uid ? 'bg-indigo-500 text-white' : 'bg-gray-200 text-gray-900'
+                          }`}
+                        >
+                          {message.sendUser.uid !== user?.uid && (
+                            <p className="text-xs mb-1">From: {message.sendUser.displayName || 'Admin'}</p>
+                          )}
+                          {message.text && <p className="mb-2">{message.text}</p>}
+                          {message.type === 'image' && (
+                            <img src={message.fileData} alt="Uploaded image" className="max-w-full h-auto rounded" />
+                          )}
+                          {message.type === 'video' && (
+                            <video src={message.fileData} controls className="max-w-full h-auto rounded" />
+                          )}
+                          {message.type === 'file' && (
+                            <a href={message.fileData} download={message.fileName} className="flex items-center space-x-2">
+                              <FiPaperclip className="w-4 h-4" />
+                              <span className="underline">{message.fileName}</span>
+                            </a>
+                          )}
+                          {message.type === 'voice' && (
+                            <CustomVoicePlayer audioSrc={message.fileData} />
+                          )}
+                          <div className="text-xs mt-1 flex justify-between">
+                            <span>{message.createdAt.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 ))
               )}
@@ -222,6 +407,37 @@ export default function ChatInterface() {
           </div>
           <footer className="bg-white shadow">
             <div className="max-w-7xl mx-auto py-4 px-4 sm:px-6 lg:px-8">
+              {(file || audioBlob) && (
+                <div className="mb-2 p-2 bg-gray-100 rounded-lg relative">
+                  {file && previewUrl ? (
+                    file.type.startsWith('image/') ? (
+                      <img src={previewUrl} alt="Selected file preview" className="max-w-xs h-auto rounded" />
+                    ) : (
+                      <video src={previewUrl} className="max-w-xs h-auto rounded" controls />
+                    )
+                  ) : file ? (
+                    <div className="flex items-center space-x-2">
+                      {getFileIcon(file.type)}
+                      <span className="text-sm text-gray-600">{file.name}</span>
+                    </div>
+                  ) : audioBlob ? (
+                    <div className="flex items-center space-x-2">
+                      <FiMic className="w-6 h-6" />
+                      <span className="text-sm text-gray-600">Voice message</span>
+                      <audio src={URL.createObjectURL(audioBlob)} controls className="max-w-full" />
+                    </div>
+                  ) : null}
+                  <button
+                    onClick={() => {
+                      removeFile();
+                      setAudioBlob(null);
+                    }}
+                    className="absolute top-1 right-1 p-1 bg-gray-200 rounded-full hover:bg-gray-300 focus:outline-none"
+                  >
+                    <FiX className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
               <form onSubmit={handleSendMessage} className="flex items-center space-x-2">
                 <input
                   type="text"
@@ -229,33 +445,55 @@ export default function ChatInterface() {
                   onChange={(e) => setNewMessage(e.target.value)}
                   placeholder="Type a message..."
                   className="flex-grow px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  disabled={isSending || isRecording}
                 />
                 <input
                   type="file"
                   ref={fileInputRef}
                   onChange={handleFileChange}
                   className="hidden"
-                  accept="image/*,application/*"
+                  accept="image/*,video/*,application/*"
+                  disabled={isSending || isRecording}
                 />
                 <button
                   type="button"
                   onClick={triggerFileInput}
-                  className="p-2 rounded-full bg-gray-200 hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="p-2 rounded-full bg-gray-200 hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
+                  disabled={isSending || isRecording}
                 >
                   <FiPaperclip className="w-5 h-5 text-gray-600" />
                 </button>
+                <TooltipProvider>
+                <Tooltip content="Record up to 20 seconds">
+                  <button
+                    type="button"
+                    onClick={toggleRecording}
+                    className={`p-2 rounded-full ${
+                      isRecording ? 'bg-red-500 text-white' : 'bg-gray-200 hover:bg-gray-300'
+                    } focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50`}
+                    disabled={isSending}
+                  >
+                    {isRecording ? <FiSquare className="w-5 h-5" /> : <FiMic className="w-5 h-5" />}
+                  </button>
+                </Tooltip>
+                </TooltipProvider>
+                {isRecording && (
+                  <span className="text-sm text-red-500">
+                    Recording: {recordingTime}s / 20s
+                  </span>
+                )}
                 <button
                   type="submit"
-                  className="p-2 rounded-full bg-indigo-500 hover:bg-indigo-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                  className="p-2 rounded-full bg-indigo-500 hover:bg-indigo-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+                  disabled={isSending || isRecording}
                 >
-                  <FiSend className="w-5 h-5 text-white" />
+                  {isSending ? (
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                  ) : (
+                    <FiSend className="w-5 h-5 text-white" />
+                  )}
                 </button>
               </form>
-              {file && (
-                <div className="mt-2">
-                  <p className="text-sm text-gray-600">Selected file: {file.name}</p>
-                </div>
-              )}
             </div>
           </footer>
         </div>

@@ -32,7 +32,7 @@ export default function AuthScreen() {
       <div className="w-full max-w-md p-8 space-y-8 bg-white rounded-lg shadow-md">
         <div className="text-center">
           <h2 className="mt-6 text-3xl font-extrabold text-gray-900">
-            Welcome to MachChat
+            Mach.chat
           </h2>
           <p className="mt-2 text-sm text-gray-600">
             Sign in to start messaging
@@ -41,17 +41,22 @@ export default function AuthScreen() {
         <button
           onClick={handleGoogleSignIn}
           disabled={loading}
-          className="w-full flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full flex items-center justify-center px-4 py-2 group h-12 px-14 border-2 border-gray-300 rounded-full transition duration-300 text-black hover:border-blue-400 focus:bg-blue-50 active:bg-blue-100"
         >
-          {loading ? (
-            <svg className="animate-spin h-5 w-5 mr-3 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
-          ) : (
-            <FcGoogle className="w-5 h-5 mr-2" />
-          )}
-          {loading ? 'Signing in...' : 'Sign in with Google'}
+         <div className="relative flex items-center space-x-4 justify-center">
+    <img src="https://www.svgrepo.com/show/475656/google-color.svg"
+        className="absolute left-0 w-5" alt="google logo"/>
+   
+
+    {loading ? <span
+        className="block w-max pl-6 font-semibold tracking-wide text-gray-700  text-sm transition duration-300 group-hover:text-blue-600 sm:text-base">
+       Signing in...
+    </span> : <span
+        className="block w-max pl-6 font-semibold tracking-wide text-gray-700  text-sm transition duration-300 group-hover:text-blue-600 sm:text-base">Continue
+        with Google
+    </span>}
+</div>
+         
         </button>
         {error && (
           <p className="mt-2 text-sm text-red-600">{error}</p>
@@ -60,4 +65,16 @@ export default function AuthScreen() {
     </div>
   )
 }
+
+{/* <button
+class="group h-12 px-6 border-2 border-gray-300 rounded-full transition duration-300 hover:border-blue-400 focus:bg-blue-50 active:bg-blue-100">
+<div class="relative flex items-center space-x-4 justify-center">
+    <img src="https://www.svgrepo.com/show/475656/google-color.svg"
+        class="absolute left-0 w-5" alt="google logo">
+    <span
+        class="block w-max font-semibold tracking-wide text-gray-700 dark:text-white text-sm transition duration-300 group-hover:text-blue-600 sm:text-base">Continue
+        with Google
+    </span>
+</div>
+</button> */}
 

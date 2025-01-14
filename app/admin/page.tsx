@@ -5,10 +5,12 @@ import { auth, db } from '@/lib/firebase'
 import { collection, query, orderBy, onSnapshot, addDoc, where, Timestamp, getDocs, doc, updateDoc, } from 'firebase/firestore'
 import { useRouter } from 'next/navigation'
 import { User } from 'firebase/auth'
-import { FiSearch, FiPaperclip, FiSend, FiChevronLeft } from 'react-icons/fi'
+import { FiSearch, FiPaperclip, FiSend, FiChevronLeft, FiFile, FiFilm, FiImage, FiX, FiMic, FiSquare } from 'react-icons/fi'
 import Image from 'next/image'
 import { Message, User as ChatUser } from '@/lib/types'
 import { signOut } from 'firebase/auth'
+import CustomVoicePlayer from '@/components/CustomVoicePlayer'
+import { Tooltip, TooltipProvider } from "@/components/ui/tooltip"
 
 interface Conversation {
   user: ChatUser
@@ -17,7 +19,21 @@ interface Conversation {
   unreadCount: number
 }
 
-const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+const MAX_FILE_SIZE = 1024 * 1024; // 1MB
+
+const formatDate = (date: Date) => {
+  const today = new Date()
+  const yesterday = new Date(today)
+  yesterday.setDate(yesterday.getDate() - 1)
+
+  if (date.toDateString() === today.toDateString()) {
+    return 'Today'
+  } else if (date.toDateString() === yesterday.toDateString()) {
+    return 'Yesterday'
+  } else {
+    return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+  }
+}
 
 export default function AdminPage() {
   const [adminUser, setAdminUser] = useState<User | null>(null)
@@ -31,8 +47,14 @@ export default function AdminPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isSending, setIsSending] = useState(false)
   const [isLoadingMessages, setIsLoadingMessages] = useState(false)
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [isRecording, setIsRecording] = useState(false)
+  const [audioBlob, setAudioBlob] = useState<Blob | null>(null)
+  const [recordingTime, setRecordingTime] = useState(0)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const audioChunksRef = useRef<Blob[]>([])
   const router = useRouter()
 
   const handleSignOut = async () => {
@@ -46,8 +68,6 @@ export default function AdminPage() {
 
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged((user) => {
-      console.log(user?.email,user?.uid,"email uid");
-      
       if (user && user.email === 'mohamedarshadcholasseri5050@gmail.com') {
         setAdminUser(user)
       } else {
@@ -65,8 +85,6 @@ export default function AdminPage() {
         collection(db, 'messages'),
         orderBy('createdAt', 'desc')
       )
-      
-      
       const unsubscribe = onSnapshot(q, (querySnapshot) => {
         const convMap = new Map<string, Conversation>()
         const messageList: Message[] = []
@@ -77,7 +95,7 @@ export default function AdminPage() {
           if (!convMap.has(userToAdd.uid)) {
             convMap.set(userToAdd.uid, {
               user: userToAdd,
-              lastMessage: message.text,
+              lastMessage: message.text || (message.type === 'voice' ? 'Voice message' : 'File'),
               lastMessageDate: message.createdAt.toDate(),
               unreadCount: message.read || message.sendUser.uid === adminUser.uid ? 0 : 1
             })
@@ -87,7 +105,7 @@ export default function AdminPage() {
               conv.unreadCount++
             }
             if (message.createdAt.toDate() > conv.lastMessageDate) {
-              conv.lastMessage = message.text
+              conv.lastMessage = message.text || (message.type === 'voice' ? 'Voice message' : 'File')
               conv.lastMessageDate = message.createdAt.toDate()
             }
           }
@@ -95,8 +113,6 @@ export default function AdminPage() {
         setConversations(Array.from(convMap.values()))
         setAllMessages(messageList)
         setIsLoading(false)
-
-      
       })
 
       return () => unsubscribe()
@@ -104,30 +120,22 @@ export default function AdminPage() {
   }, [adminUser])
 
   useEffect(() => {
-   
-    
     if (selectedUser && adminUser) {
-      
       setIsLoadingMessages(true)
-    
-    
       const filtered = allMessages.filter(
         message => 
           (message.sendUser.uid === selectedUser.uid && message.receiverUser.uid === adminUser.uid) ||
           (message.sendUser.uid === adminUser.uid && message.receiverUser.uid === selectedUser.uid)
       ).sort((a, b) => a.createdAt.toMillis() - b.createdAt.toMillis())
-
-     
-
       setFilteredMessages(filtered)
       setIsLoadingMessages(false)
 
-      // // Mark messages as read
-      // filtered.forEach(async (message) => {
-      //   if (!message.read && message.receiverUser.uid === adminUser.uid) {
-      //     await updateDoc(doc(db, 'messages', message.id), { read: true })
-      //   }
-      // })
+      // Mark messages as read
+      filtered.forEach(async (message) => {
+        if (!message.read && message.receiverUser.uid === adminUser.uid) {
+          await updateDoc(doc(db, 'messages', message.id), { read: true })
+        }
+      })
     } else {
       setFilteredMessages([])
     }
@@ -137,9 +145,21 @@ export default function AdminPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [filteredMessages])
 
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (isRecording) {
+      interval = setInterval(() => {
+        setRecordingTime((prevTime) => prevTime + 1);
+      }, 1000);
+    } else {
+      setRecordingTime(0);
+    }
+    return () => clearInterval(interval);
+  }, [isRecording]);
+
   const handleReply = async (e: React.FormEvent) => {
     e.preventDefault()
-    if ((replyText.trim() || file) && selectedUser && adminUser) {
+    if ((replyText.trim() || file || audioBlob) && selectedUser && adminUser) {
       setIsSending(true)
       const messageData: Omit<Message, 'id'> = {
         text: replyText,
@@ -156,11 +176,23 @@ export default function AdminPage() {
       }
 
       try {
-        if (file) {
+        if (audioBlob) {
           const reader = new FileReader()
           reader.onload = async (event) => {
             if (event.target && event.target.result) {
-              messageData.type = file.type.startsWith('image/') ? 'image' : 'file'
+              messageData.type = 'voice'
+              messageData.fileData = event.target.result as string
+              messageData.fileName = 'voice_message.webm'
+              messageData.fileType = 'audio/webm'
+              await addDoc(collection(db, 'messages'), messageData)
+            }
+          }
+          reader.readAsDataURL(audioBlob)
+        } else if (file) {
+          const reader = new FileReader()
+          reader.onload = async (event) => {
+            if (event.target && event.target.result) {
+              messageData.type = file.type.startsWith('image/') ? 'image' : file.type.startsWith('video/') ? 'video' : 'file'
               messageData.fileData = event.target.result as string
               messageData.fileName = file.name
               messageData.fileType = file.type
@@ -174,6 +206,8 @@ export default function AdminPage() {
 
         setReplyText('')
         setFile(null)
+        setPreviewUrl(null)
+        setAudioBlob(null)
       } catch (error) {
         console.error('Error sending message:', error)
         alert('Failed to send message. Please try again.')
@@ -183,26 +217,105 @@ export default function AdminPage() {
     }
   }
 
-
-  useEffect(()=>{
-console.log(filteredConversations,"filteredConversations");
-
-  },[])
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const selectedFile = e.target.files[0];
       if (selectedFile.size <= MAX_FILE_SIZE) {
         setFile(selectedFile);
+        if (selectedFile.type.startsWith('image/') || selectedFile.type.startsWith('video/')) {
+          const url = URL.createObjectURL(selectedFile);
+          setPreviewUrl(url);
+        } else {
+          setPreviewUrl(null);
+        }
       } else {
-        alert('This file cannot be sent. Maximum file size is 5MB.');
+        alert('This file cannot be sent. Maximum file size is 1MB.');
         e.target.value = ''; // Reset the input
+        setFile(null);
+        setPreviewUrl(null);
       }
     }
+  }
+
+  const removeFile = () => {
+    setFile(null);
+    setPreviewUrl(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  }
+
+  const getFileIcon = (fileType: string) => {
+    if (fileType.startsWith('image/')) return <FiImage className="w-6 h-6" />;
+    if (fileType.startsWith('video/')) return <FiFilm className="w-6 h-6" />;
+    return <FiFile className="w-6 h-6" />;
   }
 
   const triggerFileInput = () => {
     fileInputRef.current?.click()
   }
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        if (audioBlob.size <= MAX_FILE_SIZE) {
+          setAudioBlob(audioBlob);
+        } else {
+          alert('Voice message is too large. Maximum size is 1MB.');
+        }
+        setIsRecording(false);
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+
+      // Automatically stop recording after 20 seconds
+      setTimeout(() => {
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+          stopRecording();
+        }
+      }, 20000);
+    } catch (error) {
+      console.error('Error starting recording:', error);
+      alert('Failed to start recording. Please check your microphone permissions.');
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+    }
+  };
+
+  const toggleRecording = () => {
+    if (isRecording) {
+      stopRecording();
+    } else {
+      startRecording();
+    }
+  };
+
+  const cancelRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+    }
+    setIsRecording(false);
+    setAudioBlob(null);
+    audioChunksRef.current = [];
+  };
 
   const filteredConversations = useMemo(() => {
     return conversations.filter(conv =>
@@ -210,6 +323,29 @@ console.log(filteredConversations,"filteredConversations");
       conv.lastMessage.toLowerCase().includes(searchTerm.toLowerCase())
     )
   }, [conversations, searchTerm])
+
+  const groupMessagesByDate = (messages: Message[]) => {
+    const grouped = messages.reduce((groups, message) => {
+      const date = formatDate(message.createdAt.toDate())
+      if (!groups[date]) {
+        groups[date] = []
+      }
+      groups[date].push(message)
+      return groups
+    }, {} as Record<string, Message[]>)
+
+    return Object.entries(grouped).sort((a, b) => {
+      return new Date(b[0]).getTime() - new Date(a[0]).getTime()
+    })
+  }
+
+  if (!adminUser) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="animate-spin rounded-full h-32 w-32 border-t-2 border-b-2 border-indigo-500"></div>
+      </div>
+    )
+  }
 
   return (
     <div className="flex flex-col h-screen bg-gray-100">
@@ -315,36 +451,82 @@ console.log(filteredConversations,"filteredConversations");
                   <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
                 </div>
               ) : (
-                filteredMessages.map((message) => (
-                  <div
-                    key={message.id}
-                    className={`mb-4 ${message.sendUser.uid === adminUser?.uid ? 'text-right' : 'text-left'}`}
-                  >
-                    <div
-                      className={`inline-block p-2 rounded-lg ${
-                        message.sendUser.uid === adminUser?.uid ? 'bg-blue-500 text-white' : 'bg-white'
-                      }`}
-                    >
-                      {message.type === 'text' && <p>{message.text}</p>}
-                      {message.type === 'image' && (
-                        <img src={message.fileData} alt="Uploaded image" className="max-w-xs h-auto rounded" />
-                      )}
-                      {message.type === 'file' && (
-                        <a href={message.fileData} download={message.fileName} className="flex items-center space-x-2">
-                          <FiPaperclip className="w-4 h-4" />
-                          <span className="underline">{message.fileName}</span>
-                        </a>
-                      )}
-                      <p className="text-xs mt-1 opacity-50">
-                        {message.createdAt.toDate().toLocaleString()}
-                      </p>
+                groupMessagesByDate(filteredMessages).map(([date, messages]) => (
+                  <div key={date}>
+                    <div className="text-center my-4">
+                      <span className="bg-gray-200 text-gray-600 text-xs font-semibold px-2 py-1 rounded-full">
+                        {date}
+                      </span>
                     </div>
+                    {messages.map((message) => (
+                      <div
+                        key={message.id}
+                        className={`mb-4 ${message.sendUser.uid === adminUser?.uid ? 'text-right' : 'text-left'}`}
+                      >
+                        <div
+                          className={`inline-block p-2 rounded-lg ${
+                            message.sendUser.uid === adminUser?.uid ? 'bg-blue-500 text-white' : 'bg-white'
+                          }`}
+                        >
+                          {message.text && <p className="mb-2">{message.text}</p>}
+                          {message.type === 'image' && (
+                            <img src={message.fileData} alt="Uploaded image" className="max-w-xs h-auto rounded" />
+                          )}
+                          {message.type === 'video' && (
+                            <video src={message.fileData} className="max-w-xs h-auto rounded" controls />
+                          )}
+                          {message.type === 'file' && (
+                            <a href={message.fileData} download={message.fileName} className="flex items-center space-x-2">
+                              <FiPaperclip className="w-4 h-4" />
+                              <span className="underline">{message.fileName}</span>
+                            </a>
+                          )}
+                          {message.type === 'voice' && (
+                            <CustomVoicePlayer audioSrc={message.fileData} />
+                          )}
+                          <p className="text-xs mt-1 opacity-50">
+                            {message.createdAt.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 ))
               )}
               <div ref={messagesEndRef} />
             </div>
             <div className="bg-white border-t p-4">
+              {(file || audioBlob) && (
+                <div className="mb-2 p-2 bg-gray-100 rounded-lg relative">
+                  {file && previewUrl ? (
+                    file.type.startsWith('image/') ? (
+                      <img src={previewUrl} alt="Selected file preview" className="max-w-xs h-auto rounded" />
+                    ) : (
+                      <video src={previewUrl} className="max-w-xs h-auto rounded" controls />
+                    )
+                  ) : file ? (
+                    <div className="flex items-center space-x-2">
+                      {getFileIcon(file.type)}
+                      <span className="text-sm text-gray-600">{file.name}</span>
+                    </div>
+                  ) : audioBlob ? (
+                    <div className="flex items-center space-x-2">
+                      <FiMic className="w-6 h-6" />
+                      <span className="text-sm text-gray-600">Voice message</span>
+                      <audio src={URL.createObjectURL(audioBlob)} controls className="max-w-full" />
+                    </div>
+                  ) : null}
+                  <button
+                    onClick={() => {
+                      removeFile();
+                      setAudioBlob(null);
+                    }}
+                    className="absolute top-1 right-1 p-1 bg-gray-200 rounded-full hover:bg-gray-300 focus:outline-none"
+                  >
+                    <FiX className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
               <form onSubmit={handleReply} className="flex items-center space-x-2">
                 <input
                   type="text"
@@ -352,7 +534,7 @@ console.log(filteredConversations,"filteredConversations");
                   onChange={(e) => setReplyText(e.target.value)}
                   placeholder="Type your reply..."
                   className="flex-grow p-2 border rounded"
-                  disabled={isSending}
+                  disabled={isSending || isRecording}
                 />
                 <input
                   type="file"
@@ -360,20 +542,39 @@ console.log(filteredConversations,"filteredConversations");
                   onChange={handleFileChange}
                   className="hidden"
                   accept="image/*,video/*,application/*"
-                  disabled={isSending}
+                  disabled={isSending || isRecording}
                 />
                 <button
                   type="button"
                   onClick={triggerFileInput}
                   className="p-2 bg-gray-200 rounded hover:bg-gray-300 disabled:opacity-50"
-                  disabled={isSending}
+                  disabled={isSending || isRecording}
                 >
                   <FiPaperclip className="w-5 h-5" />
                 </button>
+                <TooltipProvider>
+                <Tooltip content="Record up to 20 seconds">
+                  <button
+                    type="button"
+                    onClick={toggleRecording}
+                    className={`p-2 rounded ${
+                      isRecording ? 'bg-red-500 text-white' : 'bg-gray-200 hover:bg-gray-300'
+                    } disabled:opacity-50`}
+                    disabled={isSending}
+                  >
+                    {isRecording ? <FiSquare className="w-5 h-5" /> : <FiMic className="w-5 h-5" />}
+                  </button>
+                </Tooltip>
+                </TooltipProvider>
+                {isRecording && (
+                  <span className="text-sm text-red-500">
+                    Recording: {recordingTime}s / 20s
+                  </span>
+                )}
                 <button
                   type="submit"
                   className="p-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
-                  disabled={isSending}
+                  disabled={isSending || isRecording}
                 >
                   {isSending ? (
                     <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
@@ -382,11 +583,6 @@ console.log(filteredConversations,"filteredConversations");
                   )}
                 </button>
               </form>
-              {file && (
-                <div className="mt-2 text-sm text-gray-600">
-                  Selected file: {file.name}
-                </div>
-              )}
             </div>
           </>
         ) : (
@@ -399,4 +595,6 @@ console.log(filteredConversations,"filteredConversations");
   </div>
   )
 }
+
+
 

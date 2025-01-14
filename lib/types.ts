@@ -13,7 +13,7 @@ export interface Message {
   sendUser: User
   receiverUser: User
   createdAt: Timestamp
-  type: 'text' | 'image' | 'file'
+  type: 'text' | 'image' | 'file' | 'voice' | 'video'
   fileData?: string
   fileName?: string
   fileType?: string
